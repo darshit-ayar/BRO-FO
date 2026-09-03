@@ -8,3 +8,5 @@ class AuthenticationEvent:
     username: str
     source_ip: str
     success: bool
+    service: str = "unknown"
+    event_type: str = "authentication"
