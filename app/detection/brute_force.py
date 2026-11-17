@@ -1,17 +1,7 @@
-from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import timedelta
 
+from app.models.alert import SecurityAlert
 from app.models.event import AuthenticationEvent
-
-
-@dataclass(frozen=True)
-class BruteForceAlert:
-    alert_type: str
-    source_ip: str
-    failure_count: int
-    window_start: datetime
-    window_end: datetime
-    severity: str
 
 
 class BruteForceDetector:
@@ -20,36 +10,45 @@ class BruteForceDetector:
         threshold: int = 5,
         window_seconds: int = 60,
     ):
+        if threshold < 1:
+            raise ValueError("Threshold must be at least 1")
+
+        if window_seconds < 1:
+            raise ValueError("Window must be at least 1 second")
+
         self.threshold = threshold
         self.window = timedelta(seconds=window_seconds)
 
     def detect(
         self,
         events: list[AuthenticationEvent],
-    ) -> list[BruteForceAlert]:
+    ) -> list[SecurityAlert]:
 
         failed_events = [
-            event
-            for event in events
-            if not event.success
+            event for event in events if not event.success
         ]
 
-        events_by_ip: dict[str, list[AuthenticationEvent]] = {}
+        events_by_target: dict[
+            tuple[str, str],
+            list[AuthenticationEvent],
+        ] = {}
 
         for event in failed_events:
-            events_by_ip.setdefault(event.source_ip, []).append(event)
+            key = (event.source_ip, event.username)
+
+            events_by_target.setdefault(key, []).append(event)
 
         alerts = []
 
-        for source_ip, ip_events in events_by_ip.items():
-            ip_events.sort(key=lambda event: event.timestamp)
+        for (source_ip, username), target_events in events_by_target.items():
+            target_events.sort(key=lambda event: event.timestamp)
 
             left = 0
 
-            for right in range(len(ip_events)):
+            for right in range(len(target_events)):
                 while (
-                    ip_events[right].timestamp
-                    - ip_events[left].timestamp
+                    target_events[right].timestamp
+                    - target_events[left].timestamp
                     > self.window
                 ):
                     left += 1
@@ -58,12 +57,13 @@ class BruteForceDetector:
 
                 if failure_count >= self.threshold:
                     alerts.append(
-                        BruteForceAlert(
+                        SecurityAlert(
                             alert_type="BRUTE_FORCE",
                             source_ip=source_ip,
+                            username=username,
                             failure_count=failure_count,
-                            window_start=ip_events[left].timestamp,
-                            window_end=ip_events[right].timestamp,
+                            window_start=target_events[left].timestamp,
+                            window_end=target_events[right].timestamp,
                             severity="HIGH",
                         )
                     )

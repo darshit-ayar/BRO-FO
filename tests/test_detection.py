@@ -101,7 +101,7 @@ def test_different_ips_are_not_combined():
     assert len(alerts) == 0
 
 
-def test_same_ip_attacking_different_users_triggers_alert():
+def test_same_ip_attacking_different_users_is_not_brute_force():
     events = [
         create_event(0, username="alice"),
         create_event(10, username="bob"),
@@ -114,5 +114,4 @@ def test_same_ip_attacking_different_users_triggers_alert():
 
     alerts = detector.detect(events)
 
-    assert len(alerts) == 1
-    assert alerts[0].source_ip == "192.168.1.50"
+    assert len(alerts) == 0
